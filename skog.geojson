@@ -1,0 +1,10 @@
+{
+"type": "FeatureCollection",
+"name": "skog",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "full_id": "w301153954", "osm_id": "301153954", "osm_type": "way", "landuse": "forest", "leaf_type": null, "leaf_cycle": null }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 7.7924368, 58.0941157 ], [ 7.7924828, 58.0940708 ], [ 7.7936791, 58.0941849 ], [ 7.793895, 58.0942504 ], [ 7.7942479, 58.0940139 ], [ 7.7943013, 58.0939781 ], [ 7.7940684, 58.0943271 ], [ 7.7924368, 58.0941157 ] ] ] ] } },
+{ "type": "Feature", "properties": { "full_id": "w610911021", "osm_id": "610911021", "osm_type": "way", "landuse": "forest", "leaf_type": "needleleaved", "leaf_cycle": "evergreen" }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 7.7217774, 58.0569441 ], [ 7.7222289, 58.0571102 ], [ 7.7227126, 58.0573307 ], [ 7.7232642, 58.0575428 ], [ 7.7238005, 58.0577098 ], [ 7.7241587, 58.0576504 ], [ 7.7241813, 58.0574891 ], [ 7.7241541, 58.0573002 ], [ 7.724554, 58.0570167 ], [ 7.7246181, 58.056909 ], [ 7.7239103, 58.056707 ], [ 7.723277, 58.0567075 ], [ 7.72331, 58.0567348 ], [ 7.7231729, 58.0567784 ], [ 7.7225436, 58.0568438 ], [ 7.7218826, 58.0568463 ], [ 7.7217774, 58.0569441 ] ] ] ] } },
+{ "type": "Feature", "properties": { "full_id": "w1088832133", "osm_id": "1088832133", "osm_type": "way", "landuse": "forest", "leaf_type": null, "leaf_cycle": null }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 7.8107133, 58.0759013 ], [ 7.8111465, 58.0764637 ], [ 7.8112699, 58.0764353 ], [ 7.8108287, 58.0758672 ], [ 7.8107133, 58.0759013 ] ] ] ] } }
+]
+}

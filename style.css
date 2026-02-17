@@ -1,0 +1,27 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+
+#kart {
+  height: 100vh;
+  width: 100%;
+}
+
+#kontrollpanel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  min-width: 200px;
+}
+
+#kontrollpanel h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.1em;
+}
