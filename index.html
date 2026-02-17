@@ -1,29 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="no">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Updated Webkart GIS</title>
+  <meta charset="UTF-8">
+  <title>Soppkart</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-    <h1>Welcome to Webkart GIS</h1>
-    <button id="button1">Button 1</button>
-    <button id="button2">Button 2</button>
-    <button id="button3">Button 3</button>
 
-    <script>
-        document.getElementById('button1').addEventListener('click', function() {
-            // Add your functionality for button 1 here
-            alert('Button 1 clicked!');
-        });
-        document.getElementById('button2').addEventListener('click', function() {
-            // Add your functionality for button 2 here
-            alert('Button 2 clicked!');
-        });
-        document.getElementById('button3').addEventListener('click', function() {
-            // Add your functionality for button 3 here
-            alert('Button 3 clicked!');
-        });
-    </script>
+<div id="kontrollpanel">
+  <h2>Soppkart</h2>
+  
+  <!-- Lag av/på -->
+  <label><input type="checkbox" id="toggleSkog" checked> Skogsområder</label><br>
+  <label><input type="checkbox" id="toggleSopp" checked> Soppobservasjoner (API)</label><br>
+  
+  <hr>
+  
+  <!-- Romlig filtrering -->
+  <label for="radius">Vis innenfor radius (km):</label>
+  <input type="number" id="radius" value="10" min="1" max="100">
+  <button onclick="filtrerPaRadius()">Filtrer</button>
+  <button onclick="nullstillFilter()">Nullstill</button>
+</div>
+
+<div id="kart"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="main.js"></script>
 </body>
 </html>
