@@ -1,8 +1,38 @@
 // ==============================================
+// CONFIGURATION OBJECT
+// ==============================================
+const CONFIG = {
+  map: {
+    defaultCenter: [58.16, 7.99],
+    defaultZoom: 9,
+    filteredZoom: 11
+  },
+  api: {
+    url: 'https://artskart.artsdatabanken.no/publicapi/api/observations/list/',
+    county: '10', // Agder
+    pageSize: 200,
+    timeout: 10000
+  },
+  filter: {
+    defaultRadius: 5
+  }
+};
+
+// ==============================================
+// UI STATE
+// ==============================================
+const UI_STATE = {
+  isLoading: false,
+  currentFilter: null,
+  userMarker: null,
+  radiusCircle: null
+};
+
+// ==============================================
 // INITIALISER KART
 // Koordinatsystem: WGS84 / EPSG:4326
 // ==============================================
-const kart = L.map('kart').setView([58.16, 7.99], 9);
+const kart = L.map('kart').setView(CONFIG.map.defaultCenter, CONFIG.map.defaultZoom);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors'
@@ -24,6 +54,75 @@ function hentSkogFarge(feature) {
   if (type === 'broadleaved')  return '#95d5b2'; // Lauvskog
   if (type === 'mixed')        return '#52b788'; // Blandingsskog
   return '#74c69d';                              // Ukjent
+}
+
+// ==============================================
+// HELPER FUNCTIONS
+// ==============================================
+
+/**
+ * Calculate centroid of a polygon using the shoelace formula
+ * @param {Array} coordinates - Array of [lon, lat] coordinate pairs
+ * @returns {Array} - [lon, lat] of the centroid
+ */
+function calculatePolygonCentroid(coordinates) {
+  let x = 0, y = 0, area = 0;
+  const n = coordinates.length;
+  
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const xi = coordinates[i][0];
+    const yi = coordinates[i][1];
+    const xj = coordinates[j][0];
+    const yj = coordinates[j][1];
+    
+    const cross = xi * yj - xj * yi;
+    area += cross;
+    x += (xi + xj) * cross;
+    y += (yi + yj) * cross;
+  }
+  
+  area *= 0.5;
+  const factor = 1 / (6 * area);
+  
+  return [x * factor, y * factor];
+}
+
+/**
+ * Check if a feature is within a given radius from user location
+ * @param {Object} feature - GeoJSON feature
+ * @param {number} userLat - User latitude
+ * @param {number} userLon - User longitude
+ * @param {number} radiusKm - Radius in kilometers
+ * @returns {boolean} - True if feature is within radius
+ */
+function isFeatureWithinRadius(feature, userLat, userLon, radiusKm) {
+  const geom = feature.geometry;
+  let centroid;
+  
+  if (geom.type === 'Polygon') {
+    centroid = calculatePolygonCentroid(geom.coordinates[0]);
+  } else if (geom.type === 'MultiPolygon') {
+    // For MultiPolygon, use the centroid of the first polygon
+    centroid = calculatePolygonCentroid(geom.coordinates[0][0]);
+  } else {
+    // Fallback for other geometry types
+    return false;
+  }
+  
+  const distance = regnUtAvstandKm(userLat, userLon, centroid[1], centroid[0]);
+  return distance <= radiusKm;
+}
+
+// Haversine-formel for calculating distance between two points
+function regnUtAvstandKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+            Math.sin(dLon/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ==============================================
@@ -69,7 +168,13 @@ fetch('skog.geojson')
 // countys[]=10 = Agder (fylke-id)
 // kingdom=Fungi filtrerer på sopp
 // ==============================================
-fetch('https://artskart.artsdatabanken.no/publicapi/api/observations/list/?countys[]=10&kingdom=Fungi&PageSize=200')
+const apiParams = new URLSearchParams({
+  'countys[]': CONFIG.api.county,
+  'kingdom': 'Fungi',
+  'PageSize': CONFIG.api.pageSize
+});
+
+fetch(`${CONFIG.api.url}?${apiParams}`)
   .then(r => {
     if (!r.ok) throw new Error('API feilet: ' + r.status);
     return r.json();
@@ -144,64 +249,196 @@ document.getElementById('toggleSopp').addEventListener('change', function() {
 function filtrerPaRadius() {
   const radiusKm = parseFloat(document.getElementById('radius').value);
 
+  if (isNaN(radiusKm) || radiusKm <= 0) {
+    alert('Vennligst angi en gyldig radius');
+    return;
+  }
+
   if (!navigator.geolocation) {
     alert('Nettleseren din støtter ikke geolokasjon');
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(function(pos) {
-    brukerPosisjon = [pos.coords.latitude, pos.coords.longitude];
+  UI_STATE.isLoading = true;
 
-    L.marker(brukerPosisjon).bindPopup('📍 Din posisjon').addTo(kart);
-
-    L.circle(brukerPosisjon, {
-      radius: radiusKm * 1000,
-      color: 'blue',
-      fillOpacity: 0.05
-    }).addTo(kart);
-
-    if (skogLag) kart.removeLayer(skogLag);
-
-    const filtrerteFeatures = alleSkogFeatures.filter(feature => {
-      const coords = feature.geometry.coordinates[0][0][0]; // MultiPolygon
-      const avstand = regnUtAvstandKm(
-        brukerPosisjon[0], brukerPosisjon[1],
-        coords[1], coords[0]
-      );
-      return avstand <= radiusKm;
-    });
-
-    skogLag = L.geoJSON(
-      { type: 'FeatureCollection', features: filtrerteFeatures },
-      {
-        style: f => ({
-          fillColor: hentSkogFarge(f),
-          color: '#1b4332',
-          weight: 1,
-          fillOpacity: 0.6
-        }),
-        onEachFeature: (feature, layer) => {
-          const skogtype = feature.properties.leaf_type || 'Skog';
-          layer.bindPopup(`<strong>🌲 ${skogtype}</strong>`);
-        }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      brukerPosisjon = [pos.coords.latitude, pos.coords.longitude];
+      
+      // Remove old marker and circle if they exist
+      if (UI_STATE.userMarker) {
+        kart.removeLayer(UI_STATE.userMarker);
       }
-    ).addTo(kart);
+      if (UI_STATE.radiusCircle) {
+        kart.removeLayer(UI_STATE.radiusCircle);
+      }
 
-    kart.setView(brukerPosisjon, 11);
-  });
+      // Add user position marker
+      UI_STATE.userMarker = L.marker(brukerPosisjon)
+        .bindPopup('📍 Din posisjon')
+        .addTo(kart);
+
+      // Add radius circle
+      UI_STATE.radiusCircle = L.circle(brukerPosisjon, {
+        radius: radiusKm * 1000,
+        color: 'blue',
+        fillColor: 'blue',
+        fillOpacity: 0.05,
+        weight: 2
+      }).addTo(kart);
+
+      // Remove existing forest layer
+      if (skogLag) kart.removeLayer(skogLag);
+
+      // Filter features using centroid calculation
+      const filtrerteFeatures = alleSkogFeatures.filter(feature => 
+        isFeatureWithinRadius(feature, brukerPosisjon[0], brukerPosisjon[1], radiusKm)
+      );
+
+      // Create new filtered layer
+      skogLag = L.geoJSON(
+        { type: 'FeatureCollection', features: filtrerteFeatures },
+        {
+          style: f => ({
+            fillColor: hentSkogFarge(f),
+            color: '#1b4332',
+            weight: 1,
+            fillOpacity: 0.6
+          }),
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties;
+
+            const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
+                             p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
+                             p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
+                                                              '🌲 Skog (ukjent type)';
+
+            const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
+                           p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
+                           'ukjent';
+
+            layer.bindPopup(`
+              <strong>${skogtype}</strong><br>
+              <em>Bladfall:</em> ${syklus}<br>
+              <em>OSM-id:</em> ${p.osm_id}<br>
+              <em>Kilde:</em> OpenStreetMap
+            `);
+          }
+        }
+      ).addTo(kart);
+
+      // Zoom to user position
+      kart.setView(brukerPosisjon, CONFIG.map.filteredZoom);
+
+      UI_STATE.currentFilter = { radius: radiusKm, position: brukerPosisjon };
+      UI_STATE.isLoading = false;
+
+      console.log(`Filtrert til ${filtrerteFeatures.length} skogsområder innenfor ${radiusKm} km`);
+    },
+    function(error) {
+      UI_STATE.isLoading = false;
+      let errorMsg = 'Kunne ikke hente din posisjon. ';
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMsg += 'Du må gi tillatelse til å bruke posisjon.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMsg += 'Posisjonsinformasjon er ikke tilgjengelig.';
+          break;
+        case error.TIMEOUT:
+          errorMsg += 'Forespørselen om posisjon tok for lang tid.';
+          break;
+        default:
+          errorMsg += 'En ukjent feil oppstod.';
+      }
+      
+      alert(errorMsg);
+      console.error('Geolocation error:', error);
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: CONFIG.api.timeout,
+      maximumAge: 0
+    }
+  );
 }
 
 function nullstillFilter() {
-  location.reload();
+  // Reset radius input to default
+  document.getElementById('radius').value = CONFIG.filter.defaultRadius;
+
+  // Remove user marker and radius circle if they exist
+  if (UI_STATE.userMarker) {
+    kart.removeLayer(UI_STATE.userMarker);
+    UI_STATE.userMarker = null;
+  }
+  
+  if (UI_STATE.radiusCircle) {
+    kart.removeLayer(UI_STATE.radiusCircle);
+    UI_STATE.radiusCircle = null;
+  }
+
+  // Remove existing forest layer
+  if (skogLag) {
+    kart.removeLayer(skogLag);
+  }
+
+  // Restore original forest layer from all features
+  skogLag = L.geoJSON(
+    { type: 'FeatureCollection', features: alleSkogFeatures },
+    {
+      style: feature => ({
+        fillColor: hentSkogFarge(feature),
+        color: '#1b4332',
+        weight: 1,
+        fillOpacity: 0.6
+      }),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+
+        const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
+                         p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
+                         p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
+                                                          '🌲 Skog (ukjent type)';
+
+        const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
+                       p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
+                       'ukjent';
+
+        layer.bindPopup(`
+          <strong>${skogtype}</strong><br>
+          <em>Bladfall:</em> ${syklus}<br>
+          <em>OSM-id:</em> ${p.osm_id}<br>
+          <em>Kilde:</em> OpenStreetMap
+        `);
+      }
+    }
+  ).addTo(kart);
+
+  // Reset map view to default
+  kart.setView(CONFIG.map.defaultCenter, CONFIG.map.defaultZoom);
+
+  // Reset UI state
+  UI_STATE.currentFilter = null;
+  brukerPosisjon = null;
+
+  console.log('Filter nullstilt - viser alle skogsområder');
 }
 
-// Haversine-formel
-function regnUtAvstandKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) ** 2 +
-            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-            Math.sin(dLon/2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+// ==============================================
+// EVENT LISTENERS
+// ==============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Wire up filter button
+  const btnFiltrer = document.getElementById('btnFiltrer');
+  if (btnFiltrer) {
+    btnFiltrer.addEventListener('click', filtrerPaRadius);
+  }
+
+  // Wire up reset button
+  const btnNullstill = document.getElementById('btnNullstill');
+  if (btnNullstill) {
+    btnNullstill.addEventListener('click', nullstillFilter);
+  }
+});
