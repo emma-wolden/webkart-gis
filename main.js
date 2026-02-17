@@ -26,6 +26,18 @@ const CONFIG = {
     maxRadius: 50
   },
   
+  // Geolocation settings
+  geolocation: {
+    enableHighAccuracy: true,
+    timeout: 10000, // ms
+    maximumAge: 0
+  },
+  
+  // Spatial calculation settings
+  spatial: {
+    polygonAreaThreshold: 1e-10 // Threshold for detecting degenerate polygons
+  },
+  
   // UI/UX settings
   ui: {
     markerColor: '#c77dff',
@@ -97,7 +109,7 @@ function calculatePolygonCentroid(coordinates) {
   
   area *= 0.5;
   
-  if (Math.abs(area) < 1e-10) {
+  if (Math.abs(area) < CONFIG.spatial.polygonAreaThreshold) {
     // Fallback to simple average if area is too small
     const avgLon = coordinates.reduce((sum, c) => sum + c[0], 0) / n;
     const avgLat = coordinates.reduce((sum, c) => sum + c[1], 0) / n;
@@ -377,9 +389,9 @@ function filtrerPaRadius() {
       console.error('Geolocation error:', error);
     },
     {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
+      enableHighAccuracy: CONFIG.geolocation.enableHighAccuracy,
+      timeout: CONFIG.geolocation.timeout,
+      maximumAge: CONFIG.geolocation.maximumAge
     }
   );
 }
