@@ -252,16 +252,6 @@ fetch(`${CONFIG.api.url}?${apiParams}`)
     console.log(`Lastet ${features.length} soppobservasjoner`);
   })
   .catch(err => console.warn('Artskart API feilet:', err));
-// ==============================================
-// LAG AV/PÅ
-// ==============================================
-document.getElementById('toggleSkog').addEventListener('change', function() {
-  if (skogLag) this.checked ? kart.addLayer(skogLag) : kart.removeLayer(skogLag);
-});
-
-document.getElementById('toggleSopp').addEventListener('change', function() {
-  if (soppObservasjonerLag) this.checked ? kart.addLayer(soppObservasjonerLag) : kart.removeLayer(soppObservasjonerLag);
-});
 
 // ==============================================
 // ROMLIG FILTRERING — vis skog innenfor X km
@@ -420,6 +410,25 @@ function nullstillFilter() {
 // EVENT LISTENERS
 // ==============================================
 document.addEventListener('DOMContentLoaded', function() {
+  // Wire up layer toggles
+  const toggleSkog = document.getElementById('toggleSkog');
+  if (toggleSkog) {
+    toggleSkog.addEventListener('change', function() {
+      if (skogLag) {
+        this.checked ? kart.addLayer(skogLag) : kart.removeLayer(skogLag);
+      }
+    });
+  }
+
+  const toggleSopp = document.getElementById('toggleSopp');
+  if (toggleSopp) {
+    toggleSopp.addEventListener('change', function() {
+      if (soppObservasjonerLag) {
+        this.checked ? kart.addLayer(soppObservasjonerLag) : kart.removeLayer(soppObservasjonerLag);
+      }
+    });
+  }
+
   // Wire up filter button
   const btnFiltrer = document.getElementById('btnFiltrer');
   if (btnFiltrer) {
