@@ -207,6 +207,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // HJELPEFUNKSJONER FOR GEOMETRI
 // ==============================================
 
+// Minimum polygon area for centroid calculation (smaller values treated as degenerate)
+const MIN_POLYGON_AREA = 1e-10;
+
 /**
  * Beregner tyngdepunktet (centroid) til et polygon ved hjelp av shoelace-formelen
  * @param {Array} coordinates - Array av [lon, lat] koordinater
@@ -228,15 +231,14 @@ function calculatePolygonCentroid(coordinates) {
   const area = sumArea / 2;
   
   // Håndter tilfeller med null-areal (degenererte polygoner)
-  if (Math.abs(area) < 1e-10) {
+  if (Math.abs(area) < MIN_POLYGON_AREA) {
     // Returner første koordinat som fallback
     return coordinates[0];
   }
   
-  // Bruk absoluttverdien av area for å håndtere både medurs og moturs koordinater
-  const absArea = Math.abs(area);
-  const centroidX = sumX / (6 * absArea * Math.sign(area));
-  const centroidY = sumY / (6 * absArea * Math.sign(area));
+  // Shoelace-formelen håndterer både medurs og moturs koordinater automatisk
+  const centroidX = sumX / (6 * area);
+  const centroidY = sumY / (6 * area);
   
   return [centroidX, centroidY];
 }
