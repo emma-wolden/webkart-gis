@@ -215,6 +215,15 @@ function calculatePolygonCentroid(coordinates) {
   }
   
   const area = sumArea / 2;
+  
+  // Håndter tilfeller med null-areal (degenererte polygoner)
+  if (Math.abs(area) < 1e-10) {
+    // Returner første koordinat som fallback
+    return coordinates[0];
+  }
+  
+  // Bruk absoluttverdien av area for å håndtere både medurs og moturs koordinater
+  const absArea = Math.abs(area);
   const centroidX = sumX / (6 * area);
   const centroidY = sumY / (6 * area);
   
