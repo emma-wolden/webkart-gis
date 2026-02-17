@@ -15,6 +15,10 @@ const CONFIG = {
   },
   filter: {
     defaultRadius: 5
+  },
+  geolocation: {
+    timeout: 10000,
+    enableHighAccuracy: true
   }
 };
 
@@ -279,7 +283,9 @@ function filtrerPaRadius() {
 
   navigator.geolocation.getCurrentPosition(
     function(pos) {
-      brukerPosisjon = [pos.coords.latitude, pos.coords.longitude];
+      const userLat = pos.coords.latitude;
+      const userLon = pos.coords.longitude;
+      brukerPosisjon = [userLat, userLon];
       
       // Remove old marker and circle if they exist
       if (UI_STATE.userMarker) {
@@ -308,7 +314,7 @@ function filtrerPaRadius() {
 
       // Filter features using centroid calculation
       const filtrerteFeatures = alleSkogFeatures.filter(feature => 
-        isFeatureWithinRadius(feature, brukerPosisjon[0], brukerPosisjon[1], radiusKm)
+        isFeatureWithinRadius(feature, userLat, userLon, radiusKm)
       );
 
       // Create new filtered layer
@@ -357,8 +363,8 @@ function filtrerPaRadius() {
       console.error('Geolocation error:', error);
     },
     {
-      enableHighAccuracy: true,
-      timeout: CONFIG.api.timeout,
+      enableHighAccuracy: CONFIG.geolocation.enableHighAccuracy,
+      timeout: CONFIG.geolocation.timeout,
       maximumAge: 0
     }
   );
