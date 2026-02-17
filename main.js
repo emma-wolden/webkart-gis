@@ -1,16 +1,60 @@
 // ==============================================
+// KONFIGURASJON
+// ==============================================
+const CONFIG = {
+  // Kart-innstillinger
+  map: {
+    center: [58.16, 7.99],
+    zoom: 9,
+    filteredZoom: 11,
+    tileLayer: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors'
+  },
+  
+  // API-innstillinger
+  api: {
+    url: 'https://artskart.artsdatabanken.no/publicapi/api/observations/list/',
+    countyId: '10', // Agder
+    kingdom: 'Fungi',
+    pageSize: 200
+  },
+  
+  // Filter-innstillinger
+  filter: {
+    defaultRadius: 5,
+    minRadius: 1,
+    maxRadius: 50
+  },
+  
+  // UI-innstillinger
+  ui: {
+    circleColor: 'blue',
+    circleFillOpacity: 0.05,
+    markerPopupText: '📍 Din posisjon'
+  }
+};
+
+// ==============================================
+// APPLIKASJONSTILSTAND
+// ==============================================
+const UI_STATE = {
+  userMarker: null,
+  filterCircle: null,
+  isFiltered: false
+};
+
+// ==============================================
 // INITIALISER KART
 // Koordinatsystem: WGS84 / EPSG:4326
 // ==============================================
-const kart = L.map('kart').setView([58.16, 7.99], 9);
+const kart = L.map('kart').setView(CONFIG.map.center, CONFIG.map.zoom);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap contributors'
+L.tileLayer(CONFIG.map.tileLayer, {
+  attribution: CONFIG.map.attribution
 }).addTo(kart);
 
 // Variabler for lag
 let skogLag = null;
-let naturtypeLag = null;
 let soppObservasjonerLag = null;
 let brukerPosisjon = null;
 let alleSkogFeatures = [];
@@ -69,7 +113,9 @@ fetch('skog.geojson')
 // countys[]=10 = Agder (fylke-id)
 // kingdom=Fungi filtrerer på sopp
 // ==============================================
-fetch('https://artskart.artsdatabanken.no/publicapi/api/observations/list/?countys[]=10&kingdom=Fungi&PageSize=200')
+const apiUrl = `${CONFIG.api.url}?countys[]=${CONFIG.api.countyId}&kingdom=${CONFIG.api.kingdom}&PageSize=${CONFIG.api.pageSize}`;
+
+fetch(apiUrl)
   .then(r => {
     if (!r.ok) throw new Error('API feilet: ' + r.status);
     return r.json();
@@ -127,16 +173,90 @@ fetch('https://artskart.artsdatabanken.no/publicapi/api/observations/list/?count
     console.log(`Lastet ${features.length} soppobservasjoner`);
   })
   .catch(err => console.warn('Artskart API feilet:', err));
+
 // ==============================================
-// LAG AV/PÅ
+// EVENT LISTENERS
 // ==============================================
-document.getElementById('toggleSkog').addEventListener('change', function() {
-  if (skogLag) this.checked ? kart.addLayer(skogLag) : kart.removeLayer(skogLag);
+document.addEventListener('DOMContentLoaded', function() {
+  // LAG AV/PÅ
+  document.getElementById('toggleSkog').addEventListener('change', function() {
+    if (skogLag) this.checked ? kart.addLayer(skogLag) : kart.removeLayer(skogLag);
+  });
+
+  document.getElementById('toggleSopp').addEventListener('change', function() {
+    if (soppObservasjonerLag) this.checked ? kart.addLayer(soppObservasjonerLag) : kart.removeLayer(soppObservasjonerLag);
+  });
+
+  // KNAPPER
+  document.getElementById('btnFiltrer').addEventListener('click', filtrerPaRadius);
+  document.getElementById('btnNullstill').addEventListener('click', nullstillFilter);
 });
 
-document.getElementById('toggleSopp').addEventListener('change', function() {
-  if (soppObservasjonerLag) this.checked ? kart.addLayer(soppObservasjonerLag) : kart.removeLayer(soppObservasjonerLag);
-});
+// ==============================================
+// HJELPEFUNKSJONER FOR GEOMETRI
+// ==============================================
+
+/**
+ * Beregner tyngdepunktet (centroid) til et polygon ved hjelp av shoelace-formelen
+ * @param {Array} coordinates - Array av [lon, lat] koordinater
+ * @returns {Array} - [lon, lat] for tyngdepunktet
+ */
+function calculatePolygonCentroid(coordinates) {
+  let sumX = 0, sumY = 0, sumArea = 0;
+  
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const [x1, y1] = coordinates[i];
+    const [x2, y2] = coordinates[i + 1];
+    
+    const crossProduct = x1 * y2 - x2 * y1;
+    sumArea += crossProduct;
+    sumX += (x1 + x2) * crossProduct;
+    sumY += (y1 + y2) * crossProduct;
+  }
+  
+  const area = sumArea / 2;
+  const centroidX = sumX / (6 * area);
+  const centroidY = sumY / (6 * area);
+  
+  return [centroidX, centroidY];
+}
+
+/**
+ * Sjekker om en feature er innenfor gitt radius
+ * Støtter både Polygon og MultiPolygon geometrier
+ * @param {Object} feature - GeoJSON feature
+ * @param {Array} userPos - [lat, lon] for brukerposisjon
+ * @param {number} radiusKm - Radius i kilometer
+ * @returns {boolean} - true hvis innenfor radius
+ */
+function isFeatureWithinRadius(feature, userPos, radiusKm) {
+  try {
+    const geomType = feature.geometry.type;
+    let centroid;
+    
+    if (geomType === 'Polygon') {
+      // For Polygon: coordinates[0] er den ytre ringen
+      centroid = calculatePolygonCentroid(feature.geometry.coordinates[0]);
+    } else if (geomType === 'MultiPolygon') {
+      // For MultiPolygon: coordinates[0][0] er den ytre ringen av første polygon
+      centroid = calculatePolygonCentroid(feature.geometry.coordinates[0][0]);
+    } else {
+      console.warn('Ukjent geometritype:', geomType);
+      return false;
+    }
+    
+    // Centroid er [lon, lat], mens userPos er [lat, lon]
+    const avstand = regnUtAvstandKm(
+      userPos[0], userPos[1],
+      centroid[1], centroid[0]
+    );
+    
+    return avstand <= radiusKm;
+  } catch (error) {
+    console.error('Feil ved beregning av avstand:', error);
+    return false;
+  }
+}
 
 // ==============================================
 // ROMLIG FILTRERING — vis skog innenfor X km
@@ -144,55 +264,163 @@ document.getElementById('toggleSopp').addEventListener('change', function() {
 function filtrerPaRadius() {
   const radiusKm = parseFloat(document.getElementById('radius').value);
 
-  if (!navigator.geolocation) {
-    alert('Nettleseren din støtter ikke geolokasjon');
+  if (isNaN(radiusKm) || radiusKm < CONFIG.filter.minRadius || radiusKm > CONFIG.filter.maxRadius) {
+    alert(`Vennligst oppgi en gyldig radius mellom ${CONFIG.filter.minRadius} og ${CONFIG.filter.maxRadius} km`);
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(function(pos) {
-    brukerPosisjon = [pos.coords.latitude, pos.coords.longitude];
+  if (!navigator.geolocation) {
+    alert('Nettleseren din støtter ikke geolokasjon. Vennligst oppdater nettleseren eller bruk en annen nettleser.');
+    return;
+  }
 
-    L.marker(brukerPosisjon).bindPopup('📍 Din posisjon').addTo(kart);
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      brukerPosisjon = [pos.coords.latitude, pos.coords.longitude];
 
-    L.circle(brukerPosisjon, {
-      radius: radiusKm * 1000,
-      color: 'blue',
-      fillOpacity: 0.05
-    }).addTo(kart);
+      // Marker brukerposisjon
+      UI_STATE.userMarker = L.marker(brukerPosisjon)
+        .bindPopup(CONFIG.ui.markerPopupText)
+        .addTo(kart);
 
-    if (skogLag) kart.removeLayer(skogLag);
+      // Vis radius-sirkel
+      UI_STATE.filterCircle = L.circle(brukerPosisjon, {
+        radius: radiusKm * 1000,
+        color: CONFIG.ui.circleColor,
+        fillOpacity: CONFIG.ui.circleFillOpacity
+      }).addTo(kart);
 
-    const filtrerteFeatures = alleSkogFeatures.filter(feature => {
-      const coords = feature.geometry.coordinates[0][0][0]; // MultiPolygon
-      const avstand = regnUtAvstandKm(
-        brukerPosisjon[0], brukerPosisjon[1],
-        coords[1], coords[0]
+      // Fjern eksisterende skoglag
+      if (skogLag) kart.removeLayer(skogLag);
+
+      // Filtrer skogsområder basert på radius
+      const filtrerteFeatures = alleSkogFeatures.filter(feature => 
+        isFeatureWithinRadius(feature, brukerPosisjon, radiusKm)
       );
-      return avstand <= radiusKm;
-    });
 
+      // Legg til filtrerte features
+      skogLag = L.geoJSON(
+        { type: 'FeatureCollection', features: filtrerteFeatures },
+        {
+          style: f => ({
+            fillColor: hentSkogFarge(f),
+            color: '#1b4332',
+            weight: 1,
+            fillOpacity: 0.6
+          }),
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties;
+
+            const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
+                             p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
+                             p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
+                                                              '🌲 Skog (ukjent type)';
+
+            const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
+                           p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
+                           'ukjent';
+
+            layer.bindPopup(`
+              <strong>${skogtype}</strong><br>
+              <em>Bladfall:</em> ${syklus}<br>
+              <em>OSM-id:</em> ${p.osm_id}<br>
+              <em>Kilde:</em> OpenStreetMap
+            `);
+          }
+        }
+      ).addTo(kart);
+
+      // Oppdater kartet
+      kart.setView(brukerPosisjon, CONFIG.map.filteredZoom);
+      UI_STATE.isFiltered = true;
+      
+      console.log(`Filtrert til ${filtrerteFeatures.length} skogsområder innenfor ${radiusKm} km`);
+    },
+    function(error) {
+      let errorMessage = 'Kunne ikke hente din posisjon. ';
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage += 'Du må gi tillatelse til å bruke posisjon.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage += 'Posisjonsinformasjon er ikke tilgjengelig.';
+          break;
+        case error.TIMEOUT:
+          errorMessage += 'Forespørselen om posisjon tok for lang tid.';
+          break;
+        default:
+          errorMessage += 'En ukjent feil oppstod.';
+      }
+      
+      alert(errorMessage);
+      console.error('Geolocation error:', error);
+    }
+  );
+}
+
+function nullstillFilter() {
+  // Fjern brukermarkør
+  if (UI_STATE.userMarker) {
+    kart.removeLayer(UI_STATE.userMarker);
+    UI_STATE.userMarker = null;
+  }
+  
+  // Fjern filtreringssirkel
+  if (UI_STATE.filterCircle) {
+    kart.removeLayer(UI_STATE.filterCircle);
+    UI_STATE.filterCircle = null;
+  }
+  
+  // Gjenopprett originalt skoglag hvis filtrert
+  if (UI_STATE.isFiltered && skogLag) {
+    kart.removeLayer(skogLag);
+    
     skogLag = L.geoJSON(
-      { type: 'FeatureCollection', features: filtrerteFeatures },
+      { type: 'FeatureCollection', features: alleSkogFeatures },
       {
-        style: f => ({
-          fillColor: hentSkogFarge(f),
+        style: feature => ({
+          fillColor: hentSkogFarge(feature),
           color: '#1b4332',
           weight: 1,
           fillOpacity: 0.6
         }),
         onEachFeature: (feature, layer) => {
-          const skogtype = feature.properties.leaf_type || 'Skog';
-          layer.bindPopup(`<strong>🌲 ${skogtype}</strong>`);
+          const p = feature.properties;
+
+          const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
+                           p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
+                           p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
+                                                            '🌲 Skog (ukjent type)';
+
+          const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
+                         p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
+                         'ukjent';
+
+          layer.bindPopup(`
+            <strong>${skogtype}</strong><br>
+            <em>Bladfall:</em> ${syklus}<br>
+            <em>OSM-id:</em> ${p.osm_id}<br>
+            <em>Kilde:</em> OpenStreetMap
+          `);
         }
       }
     ).addTo(kart);
-
-    kart.setView(brukerPosisjon, 11);
-  });
-}
-
-function nullstillFilter() {
-  location.reload();
+  }
+  
+  // Tilbakestill kartvisning
+  kart.setView(CONFIG.map.center, CONFIG.map.zoom);
+  
+  // Tilbakestill brukerposisjon
+  brukerPosisjon = null;
+  
+  // Oppdater tilstand
+  UI_STATE.isFiltered = false;
+  
+  // Tilbakestill radiusinput til standard
+  document.getElementById('radius').value = CONFIG.filter.defaultRadius;
+  
+  console.log('Filter nullstilt');
 }
 
 // Haversine-formel
