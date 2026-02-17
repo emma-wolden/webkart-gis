@@ -468,6 +468,14 @@ function regnUtAvstandKm(lat1, lon1, lat2, lon2) {
 // EVENT LISTENERS
 // ==============================================
 document.addEventListener('DOMContentLoaded', function() {
+  // Set radius input attributes from CONFIG
+  const radiusInput = document.getElementById('radius');
+  if (radiusInput) {
+    radiusInput.value = CONFIG.filter.defaultRadius;
+    radiusInput.min = CONFIG.filter.minRadius;
+    radiusInput.max = CONFIG.filter.maxRadius;
+  }
+
   // Wire up filter button
   const btnFiltrer = document.getElementById('btnFiltrer');
   if (btnFiltrer) {
