@@ -1,29 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="no">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Updated Webkart GIS</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webkart GIS - Skog og Sopp i Agder</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+        crossorigin=""/>
+  
+  <!-- Lokal CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Welcome to Webkart GIS</h1>
-    <button id="button1">Button 1</button>
-    <button id="button2">Button 2</button>
-    <button id="button3">Button 3</button>
+  <!-- Kartet -->
+  <div id="kart"></div>
 
-    <script>
-        document.getElementById('button1').addEventListener('click', function() {
-            // Add your functionality for button 1 here
-            alert('Button 1 clicked!');
-        });
-        document.getElementById('button2').addEventListener('click', function() {
-            // Add your functionality for button 2 here
-            alert('Button 2 clicked!');
-        });
-        document.getElementById('button3').addEventListener('click', function() {
-            // Add your functionality for button 3 here
-            alert('Button 3 clicked!');
-        });
-    </script>
+  <!-- Kontrollpanel -->
+  <div id="kontrollpanel">
+    <h2>🗺️ Kartlag</h2>
+    
+    <label>
+      <input type="checkbox" id="toggleSkog" checked> 🌲 Skog
+    </label>
+    <br>
+    <label>
+      <input type="checkbox" id="toggleSopp" checked> 🍄 Soppobservasjoner
+    </label>
+    
+    <hr>
+    
+    <h2>🔍 Filtrer skog</h2>
+    <label>
+      Radius (km):
+      <input type="number" id="radius" value="5" min="1" max="50" step="1">
+    </label>
+    <br><br>
+    <button id="btnFiltrer">📍 Filtrer på min posisjon</button>
+    <br><br>
+    <button id="btnNullstill">🔄 Nullstill filter</button>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+          crossorigin=""></script>
+  
+  <!-- Main app script -->
+  <script src="main.js"></script>
 </body>
 </html>
