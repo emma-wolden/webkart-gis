@@ -83,6 +83,15 @@ function calculatePolygonCentroid(coordinates) {
   }
   
   area *= 0.5;
+  
+  // Avoid division by zero for degenerate polygons
+  if (Math.abs(area) < 1e-10) {
+    // Return the average of all coordinates as fallback
+    const avgX = coordinates.reduce((sum, c) => sum + c[0], 0) / n;
+    const avgY = coordinates.reduce((sum, c) => sum + c[1], 0) / n;
+    return [avgX, avgY];
+  }
+  
   const factor = 1 / (6 * area);
   
   return [x * factor, y * factor];
@@ -125,6 +134,29 @@ function regnUtAvstandKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Generate popup content for a forest feature
+ * @param {Object} properties - Feature properties
+ * @returns {string} - HTML string for popup
+ */
+function generateSkogPopup(properties) {
+  const skogtype = properties.leaf_type === 'needleleaved' ? '🌲 Barskog' :
+                   properties.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
+                   properties.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
+                                                             '🌲 Skog (ukjent type)';
+
+  const syklus = properties.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
+                 properties.leaf_cycle === 'deciduous' ? 'Løvfellende' :
+                 'ukjent';
+
+  return `
+    <strong>${skogtype}</strong><br>
+    <em>Bladfall:</em> ${syklus}<br>
+    <em>OSM-id:</em> ${properties.osm_id}<br>
+    <em>Kilde:</em> OpenStreetMap
+  `;
+}
+
 // ==============================================
 // 1. STATISK GEOJSON — Skogsområder fra OSM via QGIS
 // ==============================================
@@ -141,23 +173,7 @@ fetch('skog.geojson')
         fillOpacity: 0.6
       }),
       onEachFeature: (feature, layer) => {
-        const p = feature.properties;
-
-        const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
-                         p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
-                         p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
-                                                          '🌲 Skog (ukjent type)';
-
-        const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
-                       p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
-                       'ukjent';
-
-        layer.bindPopup(`
-          <strong>${skogtype}</strong><br>
-          <em>Bladfall:</em> ${syklus}<br>
-          <em>OSM-id:</em> ${p.osm_id}<br>
-          <em>Kilde:</em> OpenStreetMap
-        `);
+        layer.bindPopup(generateSkogPopup(feature.properties));
       }
     }).addTo(kart);
   })
@@ -306,23 +322,7 @@ function filtrerPaRadius() {
             fillOpacity: 0.6
           }),
           onEachFeature: (feature, layer) => {
-            const p = feature.properties;
-
-            const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
-                             p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
-                             p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
-                                                              '🌲 Skog (ukjent type)';
-
-            const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
-                           p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
-                           'ukjent';
-
-            layer.bindPopup(`
-              <strong>${skogtype}</strong><br>
-              <em>Bladfall:</em> ${syklus}<br>
-              <em>OSM-id:</em> ${p.osm_id}<br>
-              <em>Kilde:</em> OpenStreetMap
-            `);
+            layer.bindPopup(generateSkogPopup(feature.properties));
           }
         }
       ).addTo(kart);
@@ -395,23 +395,7 @@ function nullstillFilter() {
         fillOpacity: 0.6
       }),
       onEachFeature: (feature, layer) => {
-        const p = feature.properties;
-
-        const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
-                         p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
-                         p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
-                                                          '🌲 Skog (ukjent type)';
-
-        const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
-                       p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
-                       'ukjent';
-
-        layer.bindPopup(`
-          <strong>${skogtype}</strong><br>
-          <em>Bladfall:</em> ${syklus}<br>
-          <em>OSM-id:</em> ${p.osm_id}<br>
-          <em>Kilde:</em> OpenStreetMap
-        `);
+        layer.bindPopup(generateSkogPopup(feature.properties));
       }
     }
   ).addTo(kart);
