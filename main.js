@@ -70,15 +70,15 @@ function hentSkogFarge(feature) {
   return '#74c69d';                              // Ukjent
 }
 
-// ==============================================
-// 1. STATISK GEOJSON — Skogsområder fra OSM via QGIS
-// ==============================================
-fetch('skog.geojson')
-  .then(r => r.json())
-  .then(data => {
-    alleSkogFeatures = data.features;
-
-    skogLag = L.geoJSON(data, {
+/**
+ * Lag et GeoJSON-lag for skogsområder med styling og popups
+ * @param {Array} features - Array av GeoJSON features
+ * @returns {L.GeoJSON} - Leaflet GeoJSON layer
+ */
+function lagSkogLag(features) {
+  return L.geoJSON(
+    { type: 'FeatureCollection', features },
+    {
       style: feature => ({
         fillColor: hentSkogFarge(feature),
         color: '#1b4332',
@@ -104,7 +104,18 @@ fetch('skog.geojson')
           <em>Kilde:</em> OpenStreetMap
         `);
       }
-    }).addTo(kart);
+    }
+  );
+}
+
+// ==============================================
+// 1. STATISK GEOJSON — Skogsområder fra OSM via QGIS
+// ==============================================
+fetch('skog.geojson')
+  .then(r => r.json())
+  .then(data => {
+    alleSkogFeatures = data.features;
+    skogLag = lagSkogLag(data.features).addTo(kart);
   })
   .catch(err => console.error('Kunne ikke laste skog.geojson:', err));
 
@@ -224,8 +235,8 @@ function calculatePolygonCentroid(coordinates) {
   
   // Bruk absoluttverdien av area for å håndtere både medurs og moturs koordinater
   const absArea = Math.abs(area);
-  const centroidX = sumX / (6 * area);
-  const centroidY = sumY / (6 * area);
+  const centroidX = sumX / (6 * absArea * Math.sign(area));
+  const centroidY = sumY / (6 * absArea * Math.sign(area));
   
   return [centroidX, centroidY];
 }
@@ -308,36 +319,7 @@ function filtrerPaRadius() {
       );
 
       // Legg til filtrerte features
-      skogLag = L.geoJSON(
-        { type: 'FeatureCollection', features: filtrerteFeatures },
-        {
-          style: f => ({
-            fillColor: hentSkogFarge(f),
-            color: '#1b4332',
-            weight: 1,
-            fillOpacity: 0.6
-          }),
-          onEachFeature: (feature, layer) => {
-            const p = feature.properties;
-
-            const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
-                             p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
-                             p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
-                                                              '🌲 Skog (ukjent type)';
-
-            const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
-                           p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
-                           'ukjent';
-
-            layer.bindPopup(`
-              <strong>${skogtype}</strong><br>
-              <em>Bladfall:</em> ${syklus}<br>
-              <em>OSM-id:</em> ${p.osm_id}<br>
-              <em>Kilde:</em> OpenStreetMap
-            `);
-          }
-        }
-      ).addTo(kart);
+      skogLag = lagSkogLag(filtrerteFeatures).addTo(kart);
 
       // Oppdater kartet
       kart.setView(brukerPosisjon, CONFIG.map.filteredZoom);
@@ -384,37 +366,7 @@ function nullstillFilter() {
   // Gjenopprett originalt skoglag hvis filtrert
   if (UI_STATE.isFiltered && skogLag) {
     kart.removeLayer(skogLag);
-    
-    skogLag = L.geoJSON(
-      { type: 'FeatureCollection', features: alleSkogFeatures },
-      {
-        style: feature => ({
-          fillColor: hentSkogFarge(feature),
-          color: '#1b4332',
-          weight: 1,
-          fillOpacity: 0.6
-        }),
-        onEachFeature: (feature, layer) => {
-          const p = feature.properties;
-
-          const skogtype = p.leaf_type === 'needleleaved' ? '🌲 Barskog' :
-                           p.leaf_type === 'broadleaved'  ? '🍂 Lauvskog' :
-                           p.leaf_type === 'mixed'        ? '🌳 Blandingsskog' :
-                                                            '🌲 Skog (ukjent type)';
-
-          const syklus = p.leaf_cycle === 'evergreen' ? 'Eviggrønn' :
-                         p.leaf_cycle === 'deciduous' ? 'Løvfellende' :
-                         'ukjent';
-
-          layer.bindPopup(`
-            <strong>${skogtype}</strong><br>
-            <em>Bladfall:</em> ${syklus}<br>
-            <em>OSM-id:</em> ${p.osm_id}<br>
-            <em>Kilde:</em> OpenStreetMap
-          `);
-        }
-      }
-    ).addTo(kart);
+    skogLag = lagSkogLag(alleSkogFeatures).addTo(kart);
   }
   
   // Tilbakestill kartvisning
