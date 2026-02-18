@@ -164,7 +164,7 @@ function generateSkogPopup(properties) {
 // ==============================================
 // 1. STATISK GEOJSON — Skogsområder fra OSM via QGIS
 // ==============================================
-fetch('skog.geojson')
+fetch('Agder_skog.geojson')
   .then(r => r.json())
   .then(data => {
     alleSkogFeatures = data.features;
@@ -181,7 +181,7 @@ fetch('skog.geojson')
       }
     }).addTo(kart);
   })
-  .catch(err => console.error('Kunne ikke laste skog.geojson:', err));
+  .catch(err => console.error('Kunne ikke laste Agder_skog.geojson:', err));
 
 // ==============================================
 // 2. EKSTERNT API — Soppobservasjoner fra Artskart
