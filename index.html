@@ -1,32 +1,36 @@
 <!DOCTYPE html>
 <html lang="no">
 <head>
-  <meta charset="UTF-8">
-  <title>Soppkart</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="style.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Totalforsvaråret 2026</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Vårt CSS -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Kartet -->
+    <div id="map"></div>
+    
+    <!-- Informasjonspanel -->
+    <div class="info-panel">
+        <h2>⛰️ Naturfarer i Agder</h2>
+        <p><em>💡 Klikk på markørene for kommunenavn</em></p>
+        <p id="status">⏳ Laster data...</p>
+        <hr>
+       
+    </div>
 
-<div id="kontrollpanel">
-  <h2>Soppkart</h2>
-  
-  <!-- Lag av/på -->
-  <label><input type="checkbox" id="toggleSkog" checked> Skogsområder</label><br>
-  <label><input type="checkbox" id="toggleSopp" checked> Soppobservasjoner (API)</label><br>
-  
-  <hr>
-  
-  <!-- Romlig filtrering -->
-  <label for="radius">Vis innenfor radius (km):</label>
-  <input type="number" id="radius" value="10" min="1" max="100">
-  <button onclick="filtrerPaRadius()">Filtrer</button>
-  <button onclick="nullstillFilter()">Nullstill</button>
-</div>
-
-<div id="kart"></div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="main.js"></script>
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Turf.js for avstandsberegning -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    
+    <!-- Vårt script -->
+    <script src="script.js"></script>
 </body>
 </html>
