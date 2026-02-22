@@ -140,10 +140,18 @@ function loadWMSLayersOnce() {
     attribution: 'Skredfaresoner © NVE'
   };
 
-  // Du kan bruke lag-navnene (mest robust) eller ID '1'/'2'/'3'
-  skred100  = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_100'  });
-  skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_1000' });
-  skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_5000' });
+  // NVE MapServer bruker numeriske lag-IDer: '0' = 100 år, '1' = 1000 år, '2' = 5000 år
+  skred100  = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: '0' });
+  skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: '1' });
+  skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: '2' });
+
+  // Debug-logging for WMS-lasting
+  skred100.on('load',  () => console.log('✅ WMS skred100 (lag 0) lastet'));
+  skred100.on('error', () => console.error('❌ WMS skred100 (lag 0) feilet'));
+  skred1000.on('load',  () => console.log('✅ WMS skred1000 (lag 1) lastet'));
+  skred1000.on('error', () => console.error('❌ WMS skred1000 (lag 1) feilet'));
+  skred5000.on('load',  () => console.log('✅ WMS skred5000 (lag 2) lastet'));
+  skred5000.on('error', () => console.error('❌ WMS skred5000 (lag 2) feilet'));
 
   // Slå PÅ kun 100-år som standard (raskere + noe å se med én gang)
   skred100.addTo(map);
@@ -152,7 +160,7 @@ function loadWMSLayersOnce() {
   // Oppdater lagkontrollen nå som WMS finnes
   ensureLayerControl();
 
-  console.log('✅ WMS-lag lastet (100/1000/5000), 100-år aktivt');
+  console.log('✅ WMS-lag opprettet (lag 0/1/2), 100-år aktivt');
 }
 
 
