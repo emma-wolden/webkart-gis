@@ -1,25 +1,34 @@
 // ======================================================
-// 1) INITIALISER KARTET (uten API)
+// 1) INITIALISER KARTET
 // ======================================================
 const map = L.map('map', { zoomControl: true })
-  .setView([58.5, 7.9], 7); // Sør-Norge – vi zoomer til Agder når GeoJSON er lastet
+  .setView([58.5, 7.9], 7); // Sør-Norge – zoomer til Agder når GeoJSON er lastet
 
 // Bakgrunnskart
-const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap-bidragsytere',
-  maxZoom: 19
-}).addTo(map);
+const osm = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+  {
+    attribution: '© Carto, © OpenStreetMap',
+    maxZoom: 19
+  }
+).addTo(map);
 
+// Målestokk
 L.control.scale({ metric: true, imperial: false }).addTo(map);
+
 console.log('✅ Kart initiert');
 
 
 // ======================================================
 // 2) STATUS & GLOBALE REFERANSER
 // ======================================================
-let agderLayer = null;   // Leaflet-lag for Agder
-let agderGeoJSON = null; // Rådata (for Turf-sjekk)
-let layerControl = null; // Lagkontroll
+let agderLayer = null;      // Leaflet-lag for Agder
+let agderGeoJSON = null;    // Rådata (for Turf-sjekk)
+let layerControl = null;    // Lagkontroll
+let skred100 = null;        // WMS-lag (100 år)
+let skred1000 = null;       // WMS-lag (1000 år)
+let skred5000 = null;       // WMS-lag (5000 år)
+let wmsLoaded = false;      // Flag: har vi allerede lastet WMS?
 
 function setStatus(msg) {
   const el = document.getElementById('status');
@@ -29,20 +38,20 @@ function setStatus(msg) {
 
 
 // ======================================================
-// 3) LAGKONTROLL – bare bakgrunn + Agder (når klart)
+// 3) LAGKONTROLL – base + overlays (Agder + WMS når klare)
 // ======================================================
 function ensureLayerControl() {
-  if (layerControl) {
-    map.removeControl(layerControl);
-  }
+  if (layerControl) map.removeControl(layerControl);
 
-  const baseMaps = {
-    'OpenStreetMap': osm
-  };
+  const baseMaps = { 'OpenStreetMap': osm };
 
-  const overlays = {
-    'Agder (GeoJSON)': agderLayer || L.featureGroup()
-  };
+  // Bygg overlays dynamisk – kun legg inn lag som finnes
+  const overlays = {};
+  overlays['Agder (GeoJSON)'] = agderLayer || L.featureGroup();
+
+  if (skred100)  overlays['Skredfare 100 år (NVE)']  = skred100;
+  if (skred1000) overlays['Skredfare 1000 år (NVE)'] = skred1000;
+  if (skred5000) overlays['Skredfare 5000 år (NVE)'] = skred5000;
 
   layerControl = L.control.layers(baseMaps, overlays, {
     collapsed: false,
@@ -52,15 +61,15 @@ function ensureLayerControl() {
   console.log('✅ Layer Control oppdatert');
 }
 
-// kall én gang nå (viser i hvert fall bakgrunnskart)
+// Kall én gang nå (viser i hvert fall bakgrunn + tom overlay for Agder)
 ensureLayerControl();
 
 
 // ======================================================
 // 4) LAST INN GEOJSON: Agder
-//    - tegner polygon
-//    - popup med kommunenavn
-//    - zoomer til extent
+//    - Tegner polygon
+//    - Popup med `kommunenavn`
+//    - Zoomer til extent
 // ======================================================
 fetch('data/agder.geojson')
   .then((r) => {
@@ -84,7 +93,7 @@ fetch('data/agder.geojson')
       }
     }).addTo(map);
 
-    // Zoom til Agder
+    // Zoom til Agder-polygone(t/ene)
     try {
       map.fitBounds(agderLayer.getBounds(), { padding: [20, 20] });
     } catch (e) {
@@ -92,7 +101,12 @@ fetch('data/agder.geojson')
     }
 
     setStatus('✅ Agder (GeoJSON) lastet');
-    ensureLayerControl(); // Oppdater kontrollen slik at Agder dukker opp i listen
+
+    // Oppdater lagkontrollen når Agder er på plass
+    ensureLayerControl();
+
+    // 👉 Laster WMS-lag ETTER at vi har zoomet inn (bedre ytelse)
+    loadWMSLayersOnce();
   })
   .catch((err) => {
     console.error('❌ agder.geojson feilet:', err);
@@ -102,8 +116,49 @@ fetch('data/agder.geojson')
 
 
 // ======================================================
-// 5) ROMLIG SPØRRING (valgfri): Klikk → inne/utenfor Agder?
-//    - Fungerer hvis Turf.js er lastet i index.html
+// 5) LAZY-LOAD WMS etter innzooming (ytelse!)
+//    - Bruker ArcGIS WMS 1.1.1 + png8 + tileSize 512 + updateWhenIdle
+//    - Slår PÅ kun 100-år ved oppstart (bruk toggles for de andre)
+// ======================================================
+function loadWMSLayersOnce() {
+  if (wmsLoaded) return;
+  wmsLoaded = true;
+
+  const NVE_WMS_URL =
+    'https://nve.geodataonline.no/arcgis/services/Skredfaresoner1/MapServer/WMSServer';
+
+  // "Sikre" parametre for raskere/roligere lasting
+  const wmsCommon = {
+    version: '1.1.1',         // trygg akserekkefølge
+    format: 'image/png8',     // mindre bilder (fallbacker til png hvis ikke støttet)
+    transparent: true,
+    opacity: 0.90,
+    tileSize: 512,            // større tile => færre requests
+    updateWhenIdle: true,     // vent til pan/zoom stopper
+    updateWhenZooming: false, // ikke hent under zoom-animasjon
+    maxZoom: 15,              // begrens detaljdybde
+    attribution: 'Skredfaresoner © NVE'
+  };
+
+  // Du kan bruke lag-navnene (mest robust) eller ID '1'/'2'/'3'
+  skred100  = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_100'  });
+  skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_1000' });
+  skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_5000' });
+
+  // Slå PÅ kun 100-år som standard (raskere + noe å se med én gang)
+  skred100.addTo(map);
+  skred100.bringToFront();
+
+  // Oppdater lagkontrollen nå som WMS finnes
+  ensureLayerControl();
+
+  console.log('✅ WMS-lag lastet (100/1000/5000), 100-år aktivt');
+}
+
+
+// ======================================================
+// 6) ROMLIG SPØRRING (valgfri)
+//    Klikk → er punktet inne i Agder? (Turf.js hvis tilgjengelig)
 // ======================================================
 map.on('click', (e) => {
   const { lat, lng } = e.latlng;

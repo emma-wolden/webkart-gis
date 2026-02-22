@@ -1,94 +1,118 @@
+/* ========== RESET ========== */
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ========== LAYOUT ========== */
+html, body {
+  height: 100%;
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #f5f5f5;
-    overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f5f5f5;
+  overflow: hidden; /* holder siden i fullskjerm-kart */
 }
 
 #map {
-    width: 100%;
-    height: 100vh;
-    z-index: 1;
+  width: 100%;
+  height: 100vh;
+  z-index: 1; /* kartet ligger under panel og kontroller */
 }
 
+/* ========== INFO-PANEL ========== */
 .info-panel {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    z-index: 1000;
-    max-width: 350px;
-    font-size: 14px;
-    border-left: 4px solid #d32f2f;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #fff;
+  padding: 16px 18px;
+  border-radius: 8px;
+  border-left: 4px solid #d32f2f;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 1000;
+  max-width: 340px;
+  font-size: 14px;
 }
 
 .info-panel h2 {
-    color: #d32f2f;
-    margin-bottom: 10px;
-    font-size: 18px;
+  color: #d32f2f;
+  margin-bottom: 10px;
+  font-size: 18px;
 }
 
 .info-panel p {
-    margin: 8px 0;
-    line-height: 1.5;
-    color: #333;
-}
-
-.info-panel strong {
-    color: #000;
+  margin: 8px 0;
+  line-height: 1.5;
+  color: #333;
 }
 
 #status {
-    color: #666;
-    font-style: italic;
-    font-size: 13px;
+  color: #666;
+  font-style: italic;
+  font-size: 13px;
 }
 
 hr {
-    margin: 10px 0;
-    border: none;
-    border-top: 1px solid #ddd;
+  margin: 10px 0;
+  border: none;
+  border-top: 1px solid #ddd;
 }
 
-/* Popup styling */
+/* ========== LEAFLET POPUPS ========== */
 .leaflet-popup-content-wrapper {
-    background-color: #fff;
-    border-radius: 5px;
-    box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+  background-color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.35);
 }
 
 .leaflet-popup-content h3 {
-    color: #d32f2f;
-    margin-bottom: 10px;
-    font-size: 14px;
+  color: #d32f2f;
+  margin-bottom: 8px;
+  font-size: 14px;
 }
 
 .leaflet-popup-content p {
-    margin: 5px 0;
-    color: #333;
-    font-size: 12px;
+  margin: 4px 0;
+  color: #333;
+  font-size: 12px;
 }
 
-/* Layer control */
+/* ========== LAYER CONTROL ========== */
 .leaflet-control-layers {
-    background: white;
-    border-radius: 5px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 
 .leaflet-control-layers-toggle {
-    width: 36px;
-    height: 36px;
+  width: 36px;
+  height: 36px;
 }
 
 .leaflet-control-layers label {
-    margin-bottom: 5px;
+  margin-bottom: 5px;
 }
+
+/* ========== (VALGFRITT) SKREDFOKUS ========== */
+/* Når du legger til klassen .skred-focus på body, dempes basiskartet
+   slik at WMS-fargene blir tydeligere.  */
+body.skred-focus .leaflet-pane.leaflet-tile-pane {
+  filter: brightness(0.85) saturate(0.9);
+}
+
+/* Løft WMS-pane helt til topp i kart-stakken, over vektorlag */
+.leaflet-pane.leaflet-overlay-pane {
+  z-index: 450; /* standard er 400 – dette hjelper WMS å ligge over */
+}
+
+<!-- Panel for liste over synlige skredområder (vektor) -->
+<div id="result-panel" aria-live="polite" aria-label="Skredområder i utsnittet">
+  <div class="rp-header">
+    <strong>Skredområder</strong>
+    <span id="rp-count">0</span>
+  </div>
+  <div id="rp-list"></div>
+</div>
