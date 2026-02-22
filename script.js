@@ -25,10 +25,9 @@ console.log('✅ Kart initiert');
 let agderLayer = null;      // Leaflet-lag for Agder
 let agderGeoJSON = null;    // Rådata (for Turf-sjekk)
 let layerControl = null;    // Lagkontroll
-let skred100 = null;        // WMS-lag (100 år)
-let skred1000 = null;       // WMS-lag (1000 år)
-let skred5000 = null;       // WMS-lag (5000 år)
-let wmsLoaded = false;      // Flag: har vi allerede lastet WMS?
+let skred100 = null;        // REST API-lag (100 år)
+let skred1000 = null;       // REST API-lag (1000 år)
+let skred5000 = null;       // REST API-lag (5000 år)
 
 function setStatus(msg) {
   const el = document.getElementById('status');
@@ -49,9 +48,9 @@ function ensureLayerControl() {
   const overlays = {};
   overlays['Agder (GeoJSON)'] = agderLayer || L.featureGroup();
 
-  if (skred100)  overlays['Skredfare 100 år (NVE)']  = skred100;
-  if (skred1000) overlays['Skredfare 1000 år (NVE)'] = skred1000;
-  if (skred5000) overlays['Skredfare 5000 år (NVE)'] = skred5000;
+  if (skred100)  overlays['Skredfare 100 år 🔴']  = skred100;
+  if (skred1000) overlays['Skredfare 1000 år 🟠'] = skred1000;
+  if (skred5000) overlays['Skredfare 5000 år 🟡'] = skred5000;
 
   layerControl = L.control.layers(baseMaps, overlays, {
     collapsed: false,
@@ -105,8 +104,8 @@ fetch('data/agder.geojson')
     // Oppdater lagkontrollen når Agder er på plass
     ensureLayerControl();
 
-    // 👉 Laster WMS-lag ETTER at vi har zoomet inn (bedre ytelse)
-    loadWMSLayersOnce();
+    // 👉 Laster skredfare via REST API etter innzooming
+    loadSkredareAPIData();
   })
   .catch((err) => {
     console.error('❌ agder.geojson feilet:', err);
@@ -116,43 +115,153 @@ fetch('data/agder.geojson')
 
 
 // ======================================================
-// 5) LAZY-LOAD WMS etter innzooming (ytelse!)
-//    - Bruker ArcGIS WMS 1.1.1 + png8 + tileSize 512 + updateWhenIdle
-//    - Slår PÅ kun 100-år ved oppstart (bruk toggles for de andre)
+// 5) LAST INN SKREDFARE via Kartverket/NVE REST API
+//    - Henter GeoJSON fra NVE ArcGIS REST API
+//    - Returnerer vektordata (ikke bilder) – interaktive polygoner
+//    - Farger: rød (100 år), oransje (1000 år), gul (5000 år)
 // ======================================================
-function loadWMSLayersOnce() {
-  if (wmsLoaded) return;
-  wmsLoaded = true;
 
-  const NVE_WMS_URL =
-    'https://nve.geodataonline.no/arcgis/services/Skredfaresoner1/MapServer/WMSServer';
+// Agder bbox (EPSG:4326)
+const AGDER_BBOX = { west: 6.8, south: 57.9, east: 9.3, north: 59.1 };
 
-  // "Sikre" parametre for raskere/roligere lasting
-  const wmsCommon = {
-    version: '1.1.1',         // trygg akserekkefølge
-    format: 'image/png8',     // mindre bilder (fallbacker til png hvis ikke støttet)
-    transparent: true,
-    opacity: 0.90,
-    tileSize: 512,            // større tile => færre requests
-    updateWhenIdle: true,     // vent til pan/zoom stopper
-    updateWhenZooming: false, // ikke hent under zoom-animasjon
-    maxZoom: 15,              // begrens detaljdybde
-    attribution: 'Skredfaresoner © NVE'
-  };
+// NVE ArcGIS REST API – skredfaresoner
+// Dokumentasjon: https://nve.geodataonline.no/arcgis/rest/services/Skredfaresoner1/MapServer
+const NVE_BASE_URL =
+  'https://nve.geodataonline.no/arcgis/rest/services/Skredfaresoner1/MapServer';
 
-  // Du kan bruke lag-navnene (mest robust) eller ID '1'/'2'/'3'
-  skred100  = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_100'  });
-  skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_1000' });
-  skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_5000' });
+// ArcGIS-feltene som ikke er meningsfulle for sluttbrukeren
+const EXCLUDED_PROPERTIES = ['objectid', 'shape_area', 'shape_length'];
 
-  // Slå PÅ kun 100-år som standard (raskere + noe å se med én gang)
-  skred100.addTo(map);
-  skred100.bringToFront();
+// Maks antall faresoneobjekter vist i result-panelet (UI-begrensning)
+const MAX_DISPLAYED_FEATURES = 20;
 
-  // Oppdater lagkontrollen nå som WMS finnes
+const SKRED_LAYERS = [
+  {
+    id: 0,
+    label: '100-år',
+    color: '#FF0000',
+    ref: 'skred100'
+  },
+  {
+    id: 1,
+    label: '1000-år',
+    color: '#FFA500',
+    ref: 'skred1000'
+  },
+  {
+    id: 2,
+    label: '5000-år',
+    color: '#FFFF00',
+    ref: 'skred5000'
+  }
+];
+
+async function loadSkredareAPIData() {
+  setStatus('⏳ Henter skredfare-data fra NVE REST API...');
+  console.log('🌐 Starter henting av skredfare via NVE REST API');
+
+  const { west, south, east, north } = AGDER_BBOX;
+  // ArcGIS geometry-parameter: kommaseparert bbox i angitt SRS
+  const bboxParam = encodeURIComponent(`${west},${south},${east},${north}`);
+
+  let anyLoaded = false;
+
+  for (const def of SKRED_LAYERS) {
+    const url =
+      `${NVE_BASE_URL}/${def.id}/query` +
+      `?where=${encodeURIComponent('1=1')}` + // velg alle objekter
+      `&outFields=*` +
+      `&returnGeometry=true` +
+      `&outSR=4326` +
+      `&f=geojson` +
+      `&geometry=${bboxParam}` +
+      `&geometryType=esriGeometryEnvelope` +
+      `&inSR=4326` +
+      `&spatialRel=esriSpatialRelIntersects` +
+      `&resultRecordCount=500`; // 500 er tilstrekkelig for Agder-utsnitt
+
+    console.log(`🌐 Henter skred ${def.label}: ${NVE_BASE_URL}/${def.id}/query`);
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} for lag ${def.label}`);
+      }
+      const geojson = await response.json();
+
+      const featureCount = (geojson.features || []).length;
+      console.log(`✅ Skred ${def.label}: ${featureCount} objekter hentet`);
+
+      const layer = L.geoJSON(geojson, {
+        style: {
+          color: def.color,
+          weight: 1.5,
+          fillColor: def.color,
+          fillOpacity: 0.40,
+          opacity: 0.85
+        },
+        onEachFeature: (feature, lyr) => {
+          const p = feature.properties || {};
+          // API-et bruker 'navn' (lag 0/1) eller 'NAVN' (lag 2) avhengig av versjon
+          const name = p.navn || p.NAVN || p.skredtype || 'Skredfare';
+          lyr.bindPopup(
+            `<strong>Skredfare ${def.label}</strong><br/>` +
+            `${name}<br/>` +
+            `<small>${Object.entries(p)
+              .filter(([k]) => !EXCLUDED_PROPERTIES.includes(k.toLowerCase()))
+              .map(([k, v]) => `${k}: ${v}`)
+              .join('<br/>')}</small>`
+          );
+        }
+      });
+
+      // Legg 100-år til i kartet som standard; de andre er skjult til brukeren slår dem på
+      if (def.ref === 'skred100') {
+        layer.addTo(map);
+        skred100 = layer;
+      } else if (def.ref === 'skred1000') {
+        skred1000 = layer;
+      } else {
+        skred5000 = layer;
+      }
+
+      anyLoaded = true;
+    } catch (err) {
+      console.error(`❌ Feil ved henting av skred ${def.label}:`, err);
+    }
+  }
+
+  // Oppdater lagkontroll og result-panel
   ensureLayerControl();
+  updateResultPanel();
 
-  console.log('✅ WMS-lag lastet (100/1000/5000), 100-år aktivt');
+  if (anyLoaded) {
+    setStatus('✅ Skredfare-data lastet fra NVE REST API');
+    console.log('✅ Alle tilgjengelige skredfare-lag er lastet');
+  } else {
+    setStatus('⚠️ Klarte ikke å hente skredfare-data (se konsoll for detaljer)');
+  }
+}
+
+function updateResultPanel() {
+  const countEl = document.getElementById('rp-count');
+  const listEl  = document.getElementById('rp-list');
+  if (!countEl || !listEl) return;
+
+  const allFeatures = [];
+  [skred100, skred1000, skred5000].forEach((layer) => {
+    if (!layer) return;
+    layer.eachLayer((lyr) => {
+      const p = lyr.feature && lyr.feature.properties ? lyr.feature.properties : {};
+      allFeatures.push(p.navn || p.NAVN || p.skredtype || 'Skredfare');
+    });
+  });
+
+  countEl.textContent = allFeatures.length;
+  listEl.innerHTML = allFeatures
+    .slice(0, MAX_DISPLAYED_FEATURES)
+    .map((n) => `<div class="rp-item">${n}</div>`)
+    .join('');
 }
 
 
