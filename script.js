@@ -130,9 +130,9 @@ function loadWMSLayersOnce() {
   // "Sikre" parametre for raskere/roligere lasting
   const wmsCommon = {
     version: '1.1.1',         // trygg akserekkefølge
-    format: 'image/png8',     // mindre bilder (fallbacker til png hvis ikke støttet)
+    format: 'image/png',      // bred kompatibilitet
     transparent: true,
-    opacity: 0.90,
+    opacity: 1.0,             // full synlighet
     tileSize: 512,            // større tile => færre requests
     updateWhenIdle: true,     // vent til pan/zoom stopper
     updateWhenZooming: false, // ikke hent under zoom-animasjon
@@ -145,14 +145,29 @@ function loadWMSLayersOnce() {
   skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_1000' });
   skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_5000' });
 
+  // Logg når tiles faktisk er hentet og rendret
+  skred100.on('load',  () => console.log('✅ WMS skred100 lastet'));
+  skred1000.on('load', () => console.log('✅ WMS skred1000 lastet'));
+  skred5000.on('load', () => console.log('✅ WMS skred5000 lastet'));
+  skred100.on('tileerror',  (e) => console.warn('⚠️ WMS skred100 tile feil:', e));
+  skred1000.on('tileerror', (e) => console.warn('⚠️ WMS skred1000 tile feil:', e));
+  skred5000.on('tileerror', (e) => console.warn('⚠️ WMS skred5000 tile feil:', e));
+
   // Slå PÅ kun 100-år som standard (raskere + noe å se med én gang)
   skred100.addTo(map);
   skred100.bringToFront();
 
   // Oppdater lagkontrollen nå som WMS finnes
   ensureLayerControl();
-
   console.log('✅ WMS-lag lastet (100/1000/5000), 100-år aktivt');
+
+  // Sørg for at WMS-lag alltid er øverst etter lag-skift
+  map.on('overlayadd', () => {
+    if (map.hasLayer(skred5000)) skred5000.bringToFront();
+    if (map.hasLayer(skred1000)) skred1000.bringToFront();
+    if (map.hasLayer(skred100))  skred100.bringToFront();
+    console.log('✅ WMS-lag brakt til front');
+  });
 }
 
 
@@ -185,3 +200,19 @@ map.on('click', (e) => {
 });
 
 console.log('✅ Klikkspørring aktivert');
+
+
+// ======================================================
+// 7) LEGEND TOGGLE
+// ======================================================
+(function () {
+  const toggleBtn = document.getElementById('legend-toggle');
+  const legendBody = document.getElementById('legend-body');
+  if (toggleBtn && legendBody) {
+    toggleBtn.addEventListener('click', () => {
+      const hidden = legendBody.style.display === 'none';
+      legendBody.style.display = hidden ? 'block' : 'none';
+      toggleBtn.textContent = hidden ? '▲' : '▼';
+    });
+  }
+}());

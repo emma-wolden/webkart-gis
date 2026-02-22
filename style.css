@@ -108,11 +108,59 @@ body.skred-focus .leaflet-pane.leaflet-tile-pane {
   z-index: 450; /* standard er 400 – dette hjelper WMS å ligge over */
 }
 
-<!-- Panel for liste over synlige skredområder (vektor) -->
-<div id="result-panel" aria-live="polite" aria-label="Skredområder i utsnittet">
-  <div class="rp-header">
-    <strong>Skredområder</strong>
-    <span id="rp-count">0</span>
-  </div>
-  <div id="rp-list"></div>
-</div>
+/* ========== LEGEND ========== */
+#legend {
+  position: absolute;
+  bottom: 30px;
+  left: 10px;
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid #d32f2f;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 1000;
+  font-size: 13px;
+  min-width: 180px;
+}
+
+#legend h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#legend h4 button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  padding: 0;
+  line-height: 1;
+}
+
+#legend-body {
+  display: block;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.legend-color {
+  width: 18px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.2);
+}
