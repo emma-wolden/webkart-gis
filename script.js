@@ -49,9 +49,9 @@ function ensureLayerControl() {
   const overlays = {};
   overlays['Agder (GeoJSON)'] = agderLayer || L.featureGroup();
 
-  if (skred100)  overlays['Skredfare 100 år (NVE)']  = skred100;
-  if (skred1000) overlays['Skredfare 1000 år (NVE)'] = skred1000;
-  if (skred5000) overlays['Skredfare 5000 år (NVE)'] = skred5000;
+  if (skred100)  overlays['Skredfare 100 år (Kartverket)']  = skred100;
+  if (skred1000) overlays['Skredfare 1000 år (Kartverket)'] = skred1000;
+  if (skred5000) overlays['Skredfare 5000 år (Kartverket)'] = skred5000;
 
   layerControl = L.control.layers(baseMaps, overlays, {
     collapsed: false,
@@ -117,33 +117,41 @@ fetch('data/agder.geojson')
 
 // ======================================================
 // 5) LAZY-LOAD WMS etter innzooming (ytelse!)
-//    - Bruker ArcGIS WMS 1.1.1 + png8 + tileSize 512 + updateWhenIdle
+//    - Bruker Kartverket WMS 1.1.1 + png + tileSize 512 + updateWhenIdle
 //    - Slår PÅ kun 100-år ved oppstart (bruk toggles for de andre)
 // ======================================================
 function loadWMSLayersOnce() {
   if (wmsLoaded) return;
   wmsLoaded = true;
 
-  const NVE_WMS_URL =
-    'https://nve.geodataonline.no/arcgis/services/Skredfaresoner1/MapServer/WMSServer';
+  const KARTVERKET_WMS_URL =
+    'https://wms.geonorge.no/skwms1/wms/skredfare';
+
+  console.log('ℹ️ Bruker Kartverket Skredfare WMS:', KARTVERKET_WMS_URL);
 
   // "Sikre" parametre for raskere/roligere lasting
   const wmsCommon = {
     version: '1.1.1',         // trygg akserekkefølge
-    format: 'image/png8',     // mindre bilder (fallbacker til png hvis ikke støttet)
+    format: 'image/png',      // standard PNG med transparens
     transparent: true,
     opacity: 0.90,
     tileSize: 512,            // større tile => færre requests
     updateWhenIdle: true,     // vent til pan/zoom stopper
     updateWhenZooming: false, // ikke hent under zoom-animasjon
     maxZoom: 15,              // begrens detaljdybde
-    attribution: 'Skredfaresoner © NVE'
+    attribution: 'Skredfaresoner © Kartverket'
   };
 
-  // Du kan bruke lag-navnene (mest robust) eller ID '1'/'2'/'3'
-  skred100  = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_100'  });
-  skred1000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_1000' });
-  skred5000 = L.tileLayer.wms(NVE_WMS_URL, { ...wmsCommon, layers: 'Skredsoner_5000' });
+  console.log('ℹ️ WMS-lag som lastes: Skredfaresoner_100, Skredfaresoner_1000, Skredfaresoner_5000');
+
+  // Kartverket-lagnavn (Skredfaresoner_100/1000/5000)
+  skred100  = L.tileLayer.wms(KARTVERKET_WMS_URL, { ...wmsCommon, layers: 'Skredfaresoner_100'  });
+  skred1000 = L.tileLayer.wms(KARTVERKET_WMS_URL, { ...wmsCommon, layers: 'Skredfaresoner_1000' });
+  skred5000 = L.tileLayer.wms(KARTVERKET_WMS_URL, { ...wmsCommon, layers: 'Skredfaresoner_5000' });
+
+  skred100.on('tileerror', (e) => console.error('❌ Kartverket WMS tilefeil (100 år):', e));
+  skred1000.on('tileerror', (e) => console.error('❌ Kartverket WMS tilefeil (1000 år):', e));
+  skred5000.on('tileerror', (e) => console.error('❌ Kartverket WMS tilefeil (5000 år):', e));
 
   // Slå PÅ kun 100-år som standard (raskere + noe å se med én gang)
   skred100.addTo(map);
@@ -152,7 +160,7 @@ function loadWMSLayersOnce() {
   // Oppdater lagkontrollen nå som WMS finnes
   ensureLayerControl();
 
-  console.log('✅ WMS-lag lastet (100/1000/5000), 100-år aktivt');
+  console.log('✅ Kartverket WMS-lag lastet (100/1000/5000), 100-år aktivt');
 }
 
 
